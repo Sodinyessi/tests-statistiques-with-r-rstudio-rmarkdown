@@ -1,0 +1,600 @@
+---
+title: "tests statistiques"
+author: "Emile Sodinyessi"
+date: "2025-11-13"
+output:
+  pdf_document:
+    keep_md: true
+    number_sections: true
+  html_document:
+    df_print: paged
+always_allow_html: true
+fontsize: 12pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+```{r}
+set.seed(123)
+library(ggplot2)
+library(dplyr)
+library(survival)
+library(survminer)
+```
+
+```{r}
+# Simulation de données : taux de CD4 selon le sexe
+
+data_t <- data.frame(
+sexe = rep(c("Homme", "Femme"), each = 50),
+CD4 = c(rnorm(50, mean=450, sd=80), rnorm(50, mean=500, sd=75))
+)
+
+# Visualisation
+
+ggplot(data_t, aes(x=sexe, y=CD4, fill=sexe)) +
+geom_boxplot() +
+theme_minimal() +
+labs(title="Distribution du taux de CD4 selon le sexe")
+
+# Test t de Student
+
+res_t <- t.test(CD4 ~ sexe, data = data_t, var.equal = TRUE)
+res_t
+
+# Interprétation des résultats du test t de Student
+
+# Extraction des valeurs utiles
+moyennes <- tapply(data_t$CD4, data_t$sexe, mean, na.rm = TRUE)
+p_value <- res_t$p.value
+
+# Commentaire interprétatif
+if (p_value < 0.05) {
+  cat("Les moyennes de CD4 diffèrent significativement selon le sexe (p =", round(p_value, 8), ").\n")
+  cat("Cela suggère qu'il existe une différence statistiquement significative entre les moyennes de CD4 chez les hommes et les femmes.\n")
+  cat("Moyenne CD4 chez les hommes :", round(moyennes["Homme"], 1), "\n")
+  cat("Moyenne CD4 chez les femmes :", round(moyennes["Femme"], 1), "\n")
+} else {
+  cat("Aucune différence significative n’a été trouvée entre les moyennes de CD4 selon le sexe (p =", round(p_value, 4), ").\n")
+  cat("Cela signifie que les niveaux moyens de CD4 sont statistiquement comparables entre les hommes et les femmes.\n")
+}
+
+```
+
+```{r wilcoxon_test, echo=TRUE}
+# --- Jeu de données avec distribution non normale ---
+set.seed(123)
+data_t$CD4_non_normal <- c(rchisq(50, df=3)*150, rchisq(50, df=3)*180)
+
+# Visualisation
+library(ggplot2)
+ggplot(data_t, aes(x = sexe, y = CD4_non_normal, fill = sexe)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution non normale des CD4 selon le sexe",
+       y = "CD4 (valeurs simulées)", x = "Sexe")
+
+# --- Test de Wilcoxon-Mann–Whitney ---
+res_wilcox <- wilcox.test(CD4_non_normal ~ sexe, data = data_t)
+
+# Affichage des résultats du test
+res_wilcox
+
+# --- Interprétation automatique ---
+p_value <- res_wilcox$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+  interpretation <- paste0(
+    "La p-value est de ", round(p_value, 4),
+    ", inférieure au seuil de 0.05. On rejette donc l’hypothèse nulle.\n",
+    "=> Il existe une différence statistiquement significative entre les deux sexes ",
+    "concernant la distribution des taux de CD4 (test de Wilcoxon-Mann–Whitney)."
+  )
+} else {
+  interpretation <- paste0(
+    "La p-value est de ", round(p_value, 4),
+    ", supérieure au seuil de 0.05. On ne rejette pas l’hypothèse nulle.\n",
+    "=> Aucune différence statistiquement significative n’a été mise en évidence ",
+    "entre les deux sexes pour la distribution des taux de CD4."
+  )
+}
+
+cat("\n# Interprétation du test de Wilcoxon-Mann–Whitney\n", interpretation)
+
+```
+
+
+```{r}
+# --- Test t apparié (avant/après) ---
+
+set.seed(123)
+
+data_paired <- data.frame(
+avant = rnorm(40, 70, 5),
+apres = rnorm(40, 72, 5)
+)
+
+# Visualisation
+
+ggplot(data_paired, aes(x=avant, y=apres)) +
+geom_point() +
+geom_abline(intercept=0, slope=1, color="red") +
+theme_minimal() +
+labs(title="Poids avant vs après traitement", x="Avant (kg)", y="Après (kg)")
+
+# Test t apparié
+
+res_paired <- t.test(data_paired$avant, data_paired$apres, paired=TRUE)
+res_paired
+
+# Interprétation automatique
+
+p_value <- res_paired$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value, 4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Poids significativement différent avant et après traitement."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value, 4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucune différence significative de poids avant/après traitement."
+)
+}
+
+cat("\n# Interprétation du test t apparié\n", interpretation)
+
+```
+
+
+```{r}
+# --- ANOVA ( + de 3 groupes indépendants) ---
+
+set.seed(123)
+
+data_aov <- data.frame(
+regime = rep(c("A","B","C"), each=40),
+HbA1c = c(rnorm(40,6.0,0.4), rnorm(40,6.5,0.5), rnorm(40,7.0,0.6))
+)
+
+# Visualisation
+
+ggplot(data_aov, aes(x=regime, y=HbA1c, fill=regime)) +
+geom_boxplot() +
+theme_minimal() +
+labs(title="HbA1c selon régime alimentaire", x="Régime", y="HbA1c (%)")
+
+# ANOVA
+
+res_aov <- aov(HbA1c ~ regime, data=data_aov)
+summary(res_aov)
+
+# Interprétation automatique
+
+p_value <- summary(res_aov)[[1]][["Pr(>F)"]][1]
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Au moins une moyenne de HbA1c diffère significativement entre les régimes."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucune différence significative de HbA1c entre les régimes."
+)
+}
+
+cat("\n# Interprétation de l'ANOVA\n", interpretation)
+
+```
+
+
+```{r}
+# --- Test du chi-deux (proportions indépendantes) ---
+
+set.seed(123)
+
+data_chi <- data.frame(
+sexe = rep(c("Homme","Femme"), each=100),
+guerison = c(rbinom(100,1,0.6), rbinom(100,1,0.75))
+)
+
+# Tableau de contingence
+
+table_chi <- table(data_chi$sexe, data_chi$guerison)
+colnames(table_chi) <- c("Non_gueri","Gueri")
+table_chi
+
+# Test du chi-deux
+
+res_chi <- chisq.test(table_chi)
+res_chi
+
+# Interprétation automatique
+
+p_value <- res_chi$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> La guérison dépend significativement du sexe."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> La guérison n’est pas significativement liée au sexe."
+)
+}
+
+cat("\n# Interprétation du test du chi-deux\n", interpretation)
+
+```
+
+
+
+```{r}
+# --- Test exact de Fisher (petits effectifs) ---
+
+set.seed(123)
+
+# Exemple : petits effectifs guérison / traitement
+
+data_fisher <- matrix(c(3,1,1,3), nrow=2)
+colnames(data_fisher) <- c("Guéri","Non_guéri")
+rownames(data_fisher) <- c("Traitement","Placebo")
+data_fisher
+
+# Test exact de Fisher
+
+res_fisher <- fisher.test(data_fisher)
+res_fisher
+
+# Interprétation automatique
+
+p_value <- res_fisher$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Association significative entre traitement et guérison."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucune association significative entre traitement et guérison."
+)
+}
+
+cat("\n# Interprétation du test exact de Fisher\n", interpretation)
+
+```
+
+
+```{r}
+# --- Test de McNemar (proportions appariées) ---
+
+set.seed(123)
+
+# Données avant / après une campagne anti-tabac (1 = fumeur, 0 = non-fumeur)
+
+avant <- c(1,1,0,0,1,0,1,1,0,0)
+apres <- c(0,1,0,0,0,0,1,1,0,0)
+table_mc <- table(avant, apres)
+table_mc
+
+# Test de McNemar
+
+res_mcnemar <- mcnemar.test(table_mc)
+res_mcnemar
+
+# Interprétation automatique
+
+p_value <- res_mcnemar$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> La proportion de fumeurs a changé significativement après la campagne."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucune différence significative de proportion de fumeurs avant/après."
+)
+}
+
+cat("\n# Interprétation du test de McNemar\n", interpretation)
+```
+
+
+```{r}
+# --- Corrélation de Pearson (relation linéaire) ---
+
+set.seed(123)
+
+# Simulation : âge vs glycémie
+
+data_corr <- data.frame(
+age = runif(100,20,70),
+glycemie = 3 + 0.05*runif(100,20,70) + rnorm(100,0,0.5)
+)
+
+# Visualisation
+
+ggplot(data_corr, aes(x=age, y=glycemie)) +
+geom_point() +
+geom_smooth(method="lm", se=TRUE) +
+theme_minimal() +
+labs(title="Corrélation âge vs glycémie", x="Âge (ans)", y="Glycémie (mmol/L)")
+
+# Test de corrélation de Pearson
+
+res_pearson <- cor.test(data_corr$age, data_corr$glycemie, method="pearson")
+res_pearson
+
+# Interprétation automatique
+
+p_value <- res_pearson$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Il existe une corrélation linéaire significative entre âge et glycémie."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucune corrélation linéaire significative entre âge et glycémie."
+)
+}
+
+cat("\n# Interprétation de la corrélation de Pearson\n", interpretation)
+```
+
+
+```{r}
+# --- Corrélation de Spearman (relation monotone non paramétrique) ---
+
+set.seed(123)
+
+# Exemple : niveau d'éducation (1-5) vs glycémie
+
+data_corr$education <- sample(1:5, 100, replace=TRUE)
+
+# Test de corrélation de Spearman
+
+res_spearman <- cor.test(data_corr$education, data_corr$glycemie, method="spearman")
+res_spearman
+
+# Interprétation automatique
+
+p_value <- res_spearman$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Il existe une corrélation monotone significative entre éducation et glycémie."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucune corrélation monotone significative entre éducation et glycémie."
+)
+}
+
+cat("\n# Interprétation de la corrélation de Spearman\n", interpretation)
+
+```
+
+
+```{r}
+# --- Test du log-rank (survie) ---
+
+set.seed(123)
+
+# Simulation : temps de survie selon traitement
+
+n <- 100
+data_surv <- data.frame(
+time = rexp(n,0.1),
+status = rbinom(n,1,0.7),
+groupe = rep(c("A","B"), each=50)
+)
+
+# Courbes de Kaplan-Meier
+
+library(survival)
+library(survminer)
+
+fit <- survfit(Surv(time, status) ~ groupe, data=data_surv)
+ggsurvplot(fit, data=data_surv, risk.table=TRUE, pval=TRUE, surv.median.line="hv",
+title="Courbes de survie par groupe")
+
+# Test du log-rank
+
+res_logrank <- survdiff(Surv(time, status) ~ groupe, data=data_surv)
+res_logrank
+
+# Interprétation automatique
+
+p_value <- 1 - pchisq(res_logrank$chisq, length(res_logrank$n)-1)
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Différence significative des courbes de survie entre les groupes."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucune différence significative des courbes de survie entre les groupes."
+)
+}
+
+cat("\n# Interprétation du test du log-rank\n", interpretation)
+
+```
+
+
+```{r}
+# --- Modèle de Cox (survie multivariée) ---
+
+set.seed(123)
+
+# Simulation : temps de survie selon traitement et âge
+
+n <- 100
+data_cox <- data.frame(
+time = rexp(n, 0.1),
+status = rbinom(n, 1, 0.7),
+groupe = rep(c("A","B"), each=50),
+age = runif(n, 40, 80)
+)
+
+library(survival)
+
+# Modèle de Cox
+
+res_cox <- coxph(Surv(time, status) ~ groupe + age, data = data_cox)
+summary(res_cox)
+
+# Interprétation automatique (pour le groupe seulement)
+
+p_value <- summary(res_cox)$coefficients["groupeB","Pr(>|z|)"]
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value pour le groupe est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Le groupe B présente un hazard ratio significativement différent du groupe A."
+)
+} else {
+interpretation <- paste0(
+"La p-value pour le groupe est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Aucun effet significatif du groupe B par rapport au groupe A sur la survie."
+)
+}
+
+cat("\n# Interprétation du modèle de Cox\n", interpretation)
+
+```
+
+
+
+```{r}
+# --- Test de Shapiro–Wilk (normalité) ---
+
+set.seed(123)
+
+# Variable continue simulée : taux de CD4
+
+data_shapiro <- rnorm(50, mean=500, sd=80)
+
+# Test de Shapiro-Wilk
+
+res_shapiro <- shapiro.test(data_shapiro)
+res_shapiro
+
+# Interprétation automatique
+
+p_value <- res_shapiro$p.value
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> La variable ne suit pas une distribution normale."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> La variable suit approximativement une distribution normale."
+)
+}
+
+cat("\n# Interprétation du test de Shapiro–Wilk\n", interpretation)
+
+```
+
+
+```{r}
+# --- Test de Levene (homogénéité des variances) ---
+
+set.seed(123)
+
+library(car)
+
+# Données simulées pour 2 groupes
+
+data_levene <- data.frame(
+groupe = rep(c("Homme","Femme"), each=50),
+CD4 = c(rnorm(50, mean=450, sd=80), rnorm(50, mean=500, sd=75))
+)
+
+# Test de Levene
+
+res_levene <- leveneTest(CD4 ~ groupe, data=data_levene)
+res_levene
+
+# Interprétation automatique
+
+p_value <- res_levene$`Pr(>F)`[1]
+alpha <- 0.05
+
+if (p_value < alpha) {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", inférieure à 0.05. On rejette l’hypothèse nulle.\n",
+"=> Les variances des groupes ne sont pas homogènes."
+)
+} else {
+interpretation <- paste0(
+"La p-value est de ", round(p_value,4),
+", supérieure à 0.05. On ne rejette pas l’hypothèse nulle.\n",
+"=> Les variances des groupes sont homogènes."
+)
+}
+
+cat("\n# Interprétation du test de Levene\n", interpretation)
+
+```
+
+
+```{r}
+
+```
+
