@@ -1,0 +1,830 @@
+---
+title: "\\textbf{tests statistiques}"
+author: "\\textbf{Emile Sodinyessi*}$^{1}$"
+output:
+  pdf_document:
+    keep_md: true
+    number_sections: true
+  html_document:
+    df_print: paged
+always_allow_html: true
+header-includes:
+  - \usepackage{tikz}
+  - \usetikzlibrary{arrows.meta, positioning}
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## tests statistiques 
+```{r message=FALSE, warning=FALSE}
+# Script complet : simulations CDISC-like + tests + diagnostics + interprétations
+# Auteur : Emile SODINYESSI
+# Date : [mettre la date]
+
+library(tidyverse)
+library(survival)
+library(lme4)
+library(lmerTest)
+library(nlme)
+library(geepack)
+library(dplyr)
+#library(MASS)
+library(broom)
+library(purrr)
+#library(car)
+library(ggpubr)
+library(patchwork)
+library(psych)
+library(irr)
+# BlandAltmanLeh fournit une fonction bland.altman.stats() - si indisponible, on calcule manuellement
+# library(BlandAltmanLeh)
+library(emmeans)
+
+
+# Load the readr package (part of tidyverse)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(stringr)
+library(tidyr)
+
+# Les packages nécessaires 
+library(VIM) # selc_var
+library(ggplot2) #graphiq
+library(tidyverse) #manip
+library(haven)
+library(kableExtra)
+library(corrplot)
+library(ggrepel)
+library(tibble) #manip
+library(caret) #model machine learning
+library(survival) # pour les modèles de survie :: coxph function of model_cox
+library(survey) # Analyse de survie :: longi
+library(srvyr)
+library(marginaleffects)
+library(networkD3) # Pour le diagramme de Sankey
+library(gtsummary) # Descritpion de la population
+library(gt)
+library(questionr) #freq and others
+library(bslib)
+library(shiny) # pour nécessité avec esquisse
+library(esquisse) # Graphics bivary
+#library(nnet) # Pour la régression multinomiale
+library(labelled)
+library(lcmm) #for model class latente
+
+#rm(list = ls())
+
+library(janitor)
+library(webshot2)
+library(data.table)
+library(tools)
+
+library(future)
+library(furrr)
+#plan(multisession, workers = 4)  # une configuration R pour exécuter des calculs en parallèle sur 4 cœurs de l'ordinateur. 
+library(tableone) #For "CreateTableOne"
+library(openxlsx) # For "write.xlsx()"
+library(officer) # For "body_add_par"
+library(flextable)
+```
+
+
+```{r}
+
+```
+
+
+\begin{landscape}
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{|p{3.2cm}|p{2.3cm}|p{4cm}|p{4.2cm}|p{4.2cm}|p{4.2cm}|}
+\hline
+\textbf{Test statistique} & \textbf{Nature} & \textbf{Hypothèses (H0 / H1)} &
+\textbf{Implications} & \textbf{Interprétation} & \textbf{Exemple clinique} \\
+\hline
+
+\textbf{t-test indépendant} & Paramétrique &
+H0: $\mu_1=\mu_2$ ; H1: $\mu_1\neq\mu_2$ &
+Compare deux moyennes indépendantes &
+p$<$0.05 $\rightarrow$ moyennes différentes &
+PA moyenne entre traitements A vs B \\ \hline
+
+\textbf{t-test apparié} & Paramétrique &
+H0: $\mu_{\text{avant}} = \mu_{\text{après}}$ &
+Compare la même population avant/après &
+p$<$0.05 $\rightarrow$ changement significatif &
+Variation HbA1c avant/après traitement \\ \hline
+
+\textbf{ANOVA} & Paramétrique &
+H0: $\mu_1=\mu_2=\mu_3$ &
+Compare $\ge 3$ moyennes &
+p$<$0.05 $\rightarrow$ ≥1 groupe différent &
+3 doses d’un médicament (effet dose) \\ \hline
+
+\textbf{ANOVA mesures répétées} & Paramétrique &
+H0: profils d’évolution identiques &
+Compare l’évolution temporelle &
+Interaction temps×groupe significative &
+Évolution CD4 à M0, M6, M12 selon traitement \\ \hline
+
+\textbf{Mann–Whitney U} & Non paramétrique &
+H0: distributions identiques &
+Alternative au t-test, non normalité &
+p$<$0.05 $\rightarrow$ différence de médiane &
+Durée d’hospitalisation entre sexes \\ \hline
+
+\textbf{Wilcoxon apparié} & Non paramétrique &
+H0: médiane(diff)=0 &
+Test apparié sans normalité &
+p$<$0.05 $\rightarrow$ changement &
+CRP avant/après intervention \\ \hline
+
+\textbf{Kruskal–Wallis} & Non paramétrique &
+H0: distributions identiques &
+Alternative ANOVA &
+p$<$0.05 $\rightarrow$ ≥1 groupe diffère &
+Score douleur pour 3 traitements \\ \hline
+
+\textbf{Chi-deux} & Paramétrique (asymptotique) &
+H0: indépendance &
+Compare proportions &
+p$<$0.05 $\rightarrow$ association &
+Taux AE entre 2 bras d’essai \\ \hline
+
+\textbf{Fisher exact} & Non paramétrique &
+H0: indépendance &
+Petits effectifs (<5) &
+p$<$0.05 $\rightarrow$ association &
+AE grave : 1/18 vs 4/16 \\ \hline
+
+\textbf{McNemar} & Non paramétrique &
+H0: p\textsubscript{discordants1}=p\textsubscript{discordants2} &
+Proportions appariées &
+p$<$0.05 $\rightarrow$ changement &
+Diagnostic avant/après formation \\ \hline
+
+\textbf{Log-rank} & Non paramétrique &
+H0: survies identiques &
+Compare courbes KM &
+p$<$0.05 $\rightarrow$ survies différentes &
+Survie post-cancer selon traitement \\ \hline
+
+\textbf{Modèle de Cox} & Semi-paramétrique &
+H0: HR = 1 &
+Analyse effet ajusté &
+HR>1 ou <1 + IC95\% &
+Risque de rechute selon traitement \\ \hline
+
+\textbf{LMM} (Linéaire mixte) & Paramétrique &
+H0: pas d’effet fixe &
+Analyse longitudinales corrélées &
+p$<$0.05 $\rightarrow$ effet significatif &
+Évolution CD4 ou BMI sur 12 mois \\ \hline
+
+\textbf{GLMM / GEE} & Paramétrique &
+Selon distribution &
+Données répétées non normales &
+Effet populationnel (GEE) &
+Nombre d’AE dans un essai \\ \hline
+
+\textbf{Corrélation Pearson} & Paramétrique &
+H0: $\rho=0$ &
+Corrélation linéaire &
+r : direction & force &
+Âge vs VEMS (FEV1) \\ \hline
+
+\textbf{Spearman} & Non paramétrique &
+H0: $\rho_s=0$ &
+Corrélation monotone &
+$r_s$ : force monotone &
+Score douleur vs temps postopératoire \\ \hline
+
+\textbf{Bland–Altman} & Non paramétrique &
+H0: concordance acceptable &
+Analyse biais + limites d’accord &
+Décision basée sur LOA &
+2 méthodes de mesure glycémie \\ \hline
+
+\textbf{ICC} & Paramétrique &
+H0: ICC = 0 &
+Reproductibilité inter/intra &
+ICC>0.75 = bon accord &
+TA mesurée par 2 médecins \\ \hline
+
+\textbf{Test Poisson / quasi-Poisson} & Paramétrique &
+H0: $\lambda_1=\lambda_2$ &
+Taux d’événements &
+p$<$0.05 $\rightarrow$ taux différents &
+Nombre de crises d’asthme/an \\ \hline
+
+\end{tabular}
+\caption{Principaux tests statistiques en recherche clinique : hypothèses, implications, interprétation et cas d’usage.}
+\end{table}
+\end{landscape}
+
+
+
+\begin{landscape}
+\rowcolors{2}{gray!10}{white}
+\scriptsize
+\begin{table}[ht]
+\centering
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{3.2cm} p{2cm} p{2.3cm} p{3.8cm} p{4cm} p{4.5cm} p{3.7cm}}
+\toprule
+\rowcolor{blue!15}
+\textbf{Test} & \textbf{Nature} & \textbf{Groupes} &
+\textbf{Hypothèses (H0 / H1)} &
+\textbf{Implications} &
+\textbf{Interprétation} &
+\textbf{Exemple clinique} \\
+\midrule
+
+t-test indépendant &
+Paramétrique, quantitatif &
+2 &
+H0 : $\mu_1 = \mu_2$ \newline H1 : $\mu_1 \neq \mu_2$ &
+Compare 2 moyennes indépendantes &
+p<0.05 : différence significative entre groupes &
+CD4 moyen entre traitement A vs B \\
+
+t-test apparié &
+Paramétrique &
+Pré/Post &
+H0 : $\mu_{\text{avant}} = \mu_{\text{après}}$ &
+Compare la variation intra-patient &
+p<0.05 : changement significatif &
+HbA1c avant/après traitement \\
+
+ANOVA &
+Paramétrique &
+$\ge 3$ &
+H0 : $\mu_1=\mu_2=\mu_3$ &
+Teste une différence globale &
+p<0.05 : au moins un groupe diffère &
+Effet dose d’un médicament \\
+
+ANOVA mesures répétées &
+Paramétrique, longitudinal &
+Même patients dans le temps &
+H0 : profils identiques &
+Analyse évolution temporelle &
+Interaction temps×groupe significative &
+CD4 à M0/M6/M12 \\
+
+Mann–Whitney U &
+Non paramétrique &
+2 &
+H0 : distributions identiques &
+Alternative au t-test si non-normalité &
+p<0.05 : différence de médiane &
+Durée d’hospitalisation H vs F \\
+
+Wilcoxon apparié &
+Non paramétrique &
+Pré/Post &
+H0 : médiane des diff = 0 &
+Test de variation appariée &
+p<0.05 : changement significatif &
+CRP avant/après chirurgie \\
+
+Kruskal–Wallis &
+Non paramétrique &
+$\ge 3$ &
+H0 : distributions identiques &
+Alternative non-paramétrique ANOVA &
+p<0.05 : groupes différents &
+Score de douleur selon traitement \\
+
+Chi-deux &
+Semi paramétrique &
+2+ catégories &
+H0 : indépendance &
+Compare proportions &
+p<0.05 : association significative &
+AE entre 2 bras \\
+
+Test exact de Fisher &
+Non paramétrique &
+2 &
+H0 : indépendance &
+Pour petits effectifs &
+p<0.05 : association &
+AE graves rares : 1/18 vs 4/16 \\
+
+McNemar &
+Non paramétrique &
+Pré/Post &
+H0 : p01 = p10 &
+Proportions appariées &
+p<0.05 : modification réelle &
+Diagnostic correct avant/après formation \\
+
+Log-rank test &
+Non paramétrique (survie) &
+2+ &
+H0 : courbes identiques &
+Compare survie globale &
+p<0.05 : survie différente &
+Survie après traitement A vs B \\
+
+Modèle de Cox &
+Semi-paramétrique &
+2+ &
+H0 : HR = 1 &
+Estime HR ajusté &
+HR>1 ou <1 : risque modifié &
+HR rechute selon traitement \\
+
+Modèle linéaire mixte (LMM) &
+Paramétrique longitudinal &
+Multi temps &
+H0 : pas d’effet fixe &
+Modélise corrélation intra-sujet &
+Significatif → effet groupe/temps &
+CD4 sur 12 mois \\
+
+GLMM / GEE &
+Paramétrique &
+Multi temps &
+Dépend distribution (binomiale/Poisson) &
+Analyse longitudinale non-normale &
+GEE = populationnel, GLMM = sujet &
+Nombre d’AE répétés \\
+
+Corrélation Pearson &
+Paramétrique &
+— &
+H0 : $\rho=0$ &
+Corrélation linéaire &
+r fort → relation forte &
+Âge vs FEV1 \\
+
+Corrélation Spearman &
+Non paramétrique &
+— &
+H0 : $\rho_s=0$ &
+Corrélation monotone &
+r_s → force relation monotone &
+Score douleur vs temps postop \\
+
+Bland–Altman &
+Non paramétrique &
+2 méthodes &
+H0 : biais ≈ 0 &
+Évalue limites d’accord &
+Si limites étroites → bonne concordance &
+2 méthodes glycémie \\
+
+ICC (concordance) &
+Paramétrique &
+2+ &
+H0 : ICC = 0 &
+Évalue reproductibilité &
+ICC>0.75 : bon accord &
+TA mesurée par 2 médecins \\
+
+Test Poisson / quasi-Poisson &
+Paramétrique &
+2+ &
+H0 : $\lambda_1=\lambda_2$ &
+Compare taux d’événements &
+p<0.05 → taux différents &
+Crises d’asthme/an \\
+
+Régression logistique &
+Paramétrique &
+— &
+H0 : OR = 1 &
+Modélise variable binaire &
+OR>1 : augmentation du risque &
+AE en fonction du traitement \\
+\bottomrule
+\end{tabular}
+\caption{Résumé des 20 principaux tests statistiques en recherche clinique (hypothèses, implications et interprétations).}
+\end{table}
+\end{landscape}
+
+
+
+```{r}
+set.seed(12345)
+
+# ----------------------------
+# 1) SIMULATION DE DONNÉES CDISC-LIKE
+# ----------------------------
+
+# Paramètres
+N <- 200                            # nombre de sujets
+centres <- c("Paris","Lyon","Bordeaux")
+trt <- c("Standard","Nouveau")      # 2 bras
+
+# ADSL : démographie
+ADSL <- tibble(
+  USUBJID = sprintf("SUB%03d", 1:N),
+  SITEID = sample(centres, N, replace = TRUE),
+  ARM = sample(trt, N, replace = TRUE),
+  AGE = round(rnorm(N, mean = 42, sd = 12)),
+  SEX = sample(c("M","F"), N, replace = TRUE, prob = c(0.55,0.45))
+)
+
+# Admettons que le nouveau traitement a un léger effet sur CD4
+# ADLB : mesures de labo longitudinales (CD4, RNA) à M0, M3, M6, M12
+# table des visites
+visits <- tibble(VISITNUM = c(0,3,6,12),
+                 VISIT = c("M0","M3","M6","M12"),
+                 VISITDY = c(0,90,180,365))
+
+# réplication des sujets pour chaque visite
+ADLB <- ADSL %>%
+  slice(rep(1:n(), each = nrow(visits))) %>%
+  group_by(USUBJID) %>%
+  mutate(
+    # assigner les visites à chaque sujet
+    VISITNUM = visits$VISITNUM,
+    VISIT = visits$VISIT,
+    VISITDY = visits$VISITDY,
+    # simulate baseline CD4
+    CD4_base = round(rnorm(1, mean = 500 - 1.5*(AGE[1]-40) + ifelse(SITEID[1]=="Paris", 10, 0), sd = 80)),
+    slope = ifelse(ARM[1]=="Nouveau", rnorm(1, 20, 8), rnorm(1, 10, 8)),
+    time_months = VISITNUM
+  ) %>%
+  ungroup() %>%
+  mutate(
+    CD4 = round(CD4_base + slope * (time_months/3) + rnorm(n(), 0, 25)),
+    RNA = round(exp(rnorm(n(), mean = 7 - 0.01*CD4, sd = 0.8)))
+  ) %>%
+  select(USUBJID, SITEID, ARM, AGE, SEX, VISITNUM, VISIT, VISITDY, CD4, RNA)
+
+# ADAE : événements indésirables (quelques-uns)
+# on simule la survenue d'au moins 1 AE pour un sous-ensemble
+ADAE <- ADSL %>%
+  mutate(nAE = rbinom(n(), 1, prob = ifelse(ARM=="Nouveau", 0.22, 0.18))) %>%
+  filter(nAE == 1) %>%
+  rowwise() %>%
+  mutate(
+    AEDECOD = sample(c("Nausea","Headache","Fatigue","Rash"), 1),
+    AESTDY = sample(c(10,30,60,120),1),
+    AESEV = sample(c("Mild","Moderate","Severe"), 1, prob = c(0.7,0.25,0.05)),
+    AESER = sample(c(0,1),1,prob = c(0.98,0.02))
+  ) %>%
+  ungroup() %>%
+  select(USUBJID, ARM, AEDECOD, AESTDY, AESEV, AESER)
+
+# ADTTE : temps jusqu'à échec virologique (survie)
+# hazard depends on arm slightly
+lam_base <- 0.02
+ADTTE <- ADSL %>%
+  mutate(
+    rate = ifelse(ARM=="Nouveau", lam_base*0.8, lam_base),
+    time = rexp(n(), rate = rate),
+    status = rbinom(n(), 1, prob = plogis(-1 + 0.1*(AGE-40))) # prob event depends on age
+  ) %>%
+  select(USUBJID, ARM, time, status)
+
+# Petite vérif
+cat("Taille ADSL:", nrow(ADSL), "\n")
+cat("Lignes ADLB:", nrow(ADLB), " (", length(unique(ADLB$USUBJID)), "sujets x", length(unique(ADLB$VISIT)), "visites )\n")
+cat("AE total:", nrow(ADAE), "\n")
+cat("Survie events:", sum(ADTTE$status), "sur", nrow(ADTTE), "\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 2) EXPLORATION & DIAGNOSTICS (plots pour CD4)
+# ----------------------------
+
+library(ggplot2)
+
+# distribution CD4 à M0
+cd4_m0 <- ADLB %>% filter(VISIT=="M0")
+p1 <- ggplot(cd4_m0, aes(x = CD4)) +
+  geom_histogram(bins=30, fill="lightblue", color="black") +
+  ggtitle("Histogramme CD4 - Baseline (M0)")
+
+p2 <- ggqqplot <- ggplot(cd4_m0, aes(sample = CD4)) +
+  stat_qq() + stat_qq_line() +
+  ggtitle("QQ-Plot CD4 - Baseline (M0)")
+
+# boxplot par bras
+p3 <- ggplot(cd4_m0, aes(x=ARM, y=CD4)) + geom_boxplot() + ggtitle("CD4 M0 par ARM")
+
+# affiche les plots
+print(p1)
+print(p2)
+print(p3)
+
+# Shapiro test (normalité) sur CD4 baseline (pour info)
+sh_test <- shapiro.test(cd4_m0$CD4)
+cat("Shapiro-Wilk CD4 M0: W=", round(sh_test$statistic,3), " p=", round(sh_test$p.value,4), "\n")
+cat("Interprétation : p<0.05 -> rejet normalité. Ici p=", round(sh_test$p.value,4), "\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 3) TEST t INDÉPENDANT (CD4 entre ARM à M12)
+# ----------------------------
+cd4_m12 <- ADLB %>% filter(VISIT=="M12")
+res_t <- t.test(CD4 ~ ARM, data = cd4_m12)
+print(res_t)
+cat("\nInterprétation (t-test indépendant) :\n")
+cat("- H0 : moyennes CD4 identiques entre ARM.\n")
+cat("- Résultat : p =", signif(res_t$p.value,3), "\n")
+if(res_t$p.value < 0.05) cat("Conclusion : On rejette H0 -> différence significative.\n\n") else cat("Conclusion : Pas de différence significative détectée.\n\n")
+
+# Diagnostic variances : Levene
+levene_res <- leveneTest(CD4 ~ ARM, data = cd4_m12) 
+print(levene_res)
+cat("\nInterprétation Levene : test homogénéité des variances. p<0.05 -> variances différentes.\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 4) TEST t APPARIÉ (CD4 M0 vs M6)
+# ----------------------------
+cd4_wide <- ADLB %>% filter(VISIT %in% c("M0","M6")) %>% select(USUBJID, VISIT, CD4) %>% spread(VISIT, CD4)
+# remove NA
+cd4_wide <- cd4_wide %>% drop_na(M0, M6)
+res_paired <- t.test(cd4_wide$M0, cd4_wide$M6, paired = TRUE)
+print(res_paired)
+cat("\nInterprétation (t-test apparié) : H0 : moyenne différence = 0. p=", signif(res_paired$p.value,3), "\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 5) ANOVA (≥3 groupes) - Exemple : effet site sur CD4 M0
+# ----------------------------
+cd4_m0$SITEID <- factor(cd4_m0$SITEID)
+anova_res <- aov(CD4 ~ SITEID, data = cd4_m0)
+summary(anova_res)
+cat("\nSi p<0.05 -> au moins un site diffère des autres. Post-hoc: TukeyHSD\n")
+print(TukeyHSD(anova_res))
+cat("\n")
+
+# ----------------------------
+# 6) TEST MANn-WHITNEY (non-paramétrique)
+# ----------------------------
+# Comparer RNA (non gaussienne) entre ARM à M6
+rna_m6 <- ADLB %>% filter(VISIT=="M6")
+wilcox_res <- wilcox.test(RNA ~ ARM, data = rna_m6)
+print(wilcox_res)
+cat("\nInterprétation Mann-Whitney : p<0.05 -> distributions différentes (medians diffèrent potentiellement).\n\n")
+
+# ----------------------------
+# 7) KRUSKAL-WALLIS (≥3 groupes non param)
+# ----------------------------
+# exemple : RNA par site M6
+kruskal_res <- kruskal.test(RNA ~ SITEID, data = rna_m6)
+print(kruskal_res)
+cat("\nInterprétation Kruskal-Wallis: p<0.05 -> au moins une distribution diffère.\n\n")
+
+# ----------------------------
+# 8) CHI² et FISHER (variables catégorielles)
+# ----------------------------
+# table succès virologique (ARBITRAIRE) à M12 (on définit une règle)
+virol_m12 <- ADLB %>% filter(VISIT=="M12") %>%
+  mutate(SUCCESS = ifelse(RNA < 50, "Yes", "No")) %>%
+  select(USUBJID, ARM, SUCCESS) %>% distinct()
+
+tbl <- table(virol_m12$ARM, virol_m12$SUCCESS)
+print(tbl)
+chi_res <- chisq.test(tbl)
+print(chi_res)
+cat("\nSi effectifs faibles, utiliser Fisher exact. Exemple Fisher :\n")
+print(fisher.test(tbl))
+
+cat("\nInterprétation Chi2/Fisher : association ARM vs succès virologique.\n\n")
+
+# ----------------------------
+# 9) Comparaison de proportions (prop.test)
+# ----------------------------
+succ_count <- as.numeric(colSums(tbl))
+# but prop.test wants successes per group
+prop_res <- prop.test(x = c(tbl[1,"Yes"], tbl[2,"Yes"]), n = c(sum(tbl[1,]), sum(tbl[2,])))
+print(prop_res)
+cat("\nInterprétation prop.test : test différence de proportions entre bras.\n\n")
+
+# ----------------------------
+# 10) CORRÉLATION (Pearson / Spearman)
+# ----------------------------
+# Pearson : corr âge - CD4 baseline
+cor_pearson <- cor.test(cd4_m0$AGE, cd4_m0$CD4)
+print(cor_pearson)
+cat("\nInterprétation Pearson : corrélation linéaire. r=", round(cor_pearson$estimate,3), " p=", signif(cor_pearson$p.value,3), "\n\n")
+
+# Spearman : RNA - duration (utilisons VISITDY)
+# Ici exemple artificiel : corrélation monotone RNA vs VISITDY (global)
+cor_spear <- cor.test(ADLB$VISITDY, ADLB$RNA, method = "spearman")
+print(cor_spear)
+cat("\nInterprétation Spearman : corrélation monotone robustes aux outliers.\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 11) RÉGRESSION LINÉAIRE
+# ----------------------------
+# modèle CD4 ~ AGE + SEX + ARM (à M12)
+df_lm <- cd4_m12 %>% select(-AGE, -SEX, -ARM) %>% 
+  left_join(ADSL %>% select(USUBJID, AGE, SEX, ARM), by = "USUBJID")
+lm_mod <- lm(CD4 ~ ARM + AGE + SEX, data = df_lm)
+summary(lm_mod)
+cat("\nInterprétation LM : coefficients beta expliquent variation CD4; vérifier R2, résidus\n\n")
+
+# Residual diagnostics
+par(mfrow=c(2,2))
+plot(lm_mod)
+par(mfrow=c(1,1))
+```
+
+
+```{r}
+# ----------------------------
+# 12) RÉGRESSION LOGISTIQUE
+# ----------------------------
+# prédire succès virologique (Yes/No) à M12 par CD4 baseline et ARM
+virol_m12_regLog <- virol_m12 %>% left_join(cd4_m0 %>% select(USUBJID, CD4) %>% rename(CD4_M0 = CD4), by="USUBJID") %>%
+  mutate(SUCCESS_BIN = ifelse(SUCCESS=="Yes",1,0))
+
+data_glm_mod = virol_m12_regLog %>% left_join(ADSL %>% select(-ARM),by="USUBJID")
+
+glm_mod <- glm(SUCCESS_BIN ~ CD4_M0 + ARM + AGE, family = binomial, data = data_glm_mod)
+summary(glm_mod)
+cat("\nInterprétation Logit : odds ratio via exp(coeff). Vérifier calibration et discrimination (AUC si besoin).\n\n")
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# ----------------------------
+# 13) SURVIVAL : Cox PH + log-rank
+# ----------------------------
+cox_mod <- coxph(Surv(time, status) ~ ARM + AGE + SEX, data = ADTTE)
+summary(cox_mod)
+cat("\nInterprétation Cox : HR = exp(coef). Vérifier proportional hazards (Schoenfeld).\n")
+cox.zph <- cox.zph(cox_mod)
+print(cox.zph)
+cat("\nTest log-rank\n")
+survdiff_res <- survdiff(Surv(time, status) ~ ARM, data = ADTTE)
+print(survdiff_res)
+cat("\nInterprétation : log-rank compare les courbes de survie entre groupes.\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 14) MODELES MIXTES (LMM) POUR DONNÉES LONGITUDINALES
+# ----------------------------
+# LMM : CD4 ~ time*ARM + (1 + time | subject)
+ADLB <- ADLB %>% mutate(time_m = VISITNUM) # time in months
+lmm_mod <- lmer(CD4 ~ time_m * ARM + AGE + SEX + (1 + time_m | USUBJID), data = ADLB, REML = TRUE)
+summary(lmm_mod)
+cat("\nInterprétation LMM : l'interaction time*ARM teste si pente diffère par ARM.\n\n")
+
+# Diagnostic résidus LMM
+plot(resid(lmm_mod) ~ fitted(lmm_mod)); abline(h=0,col="red")
+
+# estimated marginal means (ex: at times)
+emm <- emmeans(lmm_mod, ~ ARM | time_m, at = list(time_m = c(0,3,6,12)))
+print(emm)
+cat("\nEMM : différences marg. estimées par groupe et temps (utile pour reporting).\n\n")
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# ----------------------------
+# 15) GEE pour données corrélées (ex: comptes d'AE au fil du temps)
+# ----------------------------
+# Simulons compte d'AE par visite
+ae_counts <- ADLB %>%
+  group_by(USUBJID, ARM, VISITNUM) %>%
+  summarise(AEcount = rpois(n(), lambda = ifelse(ARM[1]=="Nouveau", 0.3 + 0.02*VISITNUM, 0.25 + 0.015*VISITNUM))) %>%
+  ungroup()
+gee_mod <- geeglm(AEcount ~ time_m + ARM, id = USUBJID, family = poisson, corstr = "exchangeable", data = ae_counts)
+summary(gee_mod)
+cat("\nInterprétation GEE : inference populationnelle pour données corrélées. Inspecter overdispersion.\n\n")
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# ----------------------------
+# 16) POISSON / QUASI-POISSON (comptage)
+# ----------------------------
+pois_mod <- glm(AEcount ~ ARM + time_m, family = poisson, data = ae_counts)
+summary(pois_mod)
+# vérifier surdispersion
+dispersion <- sum(residuals(pois_mod, type="pearson")^2)/df.residual(pois_mod)
+cat("Dispersion:", dispersion, "\n")
+if(dispersion > 1.5) {
+  cat("Surdispersion détectée -> utiliser quasi-Poisson ou négative binomial\n")
+  qpois_mod <- glm(AEcount ~ ARM + time_m, family = quasipoisson, data = ae_counts)
+  summary(qpois_mod)
+  nb_mod <- glm.nb(AEcount ~ ARM + time_m, data = ae_counts)
+  summary(nb_mod)
+}
+cat("\n")
+```
+
+
+```{r}
+# ----------------------------
+# 17) BLAND-ALTMAN & ICC (concordance)
+# ----------------------------
+# Simulons 2 méthodes de mesure de glycémie (G1, G2) pour 60 sujets
+set.seed(999)
+n_sub <- 60
+G1 <- rnorm(n_sub, 6.8, 0.9)
+G2 <- G1 + rnorm(n_sub, 0.05, 0.3) # méthode 2 légèrement biaisée
+ba <- tibble(G1, G2)
+ba <- ba %>% mutate(mean = (G1+G2)/2, diff = G1 - G2)
+# Bland-Altman plot
+p_ba <- ggplot(ba, aes(x = mean, y = diff)) +
+  geom_point() +
+  geom_hline(yintercept = mean(ba$diff), color="blue") +
+  geom_hline(yintercept = mean(ba$diff) + 1.96*sd(ba$diff), linetype="dashed", color="red") +
+  geom_hline(yintercept = mean(ba$diff) - 1.96*sd(ba$diff), linetype="dashed", color="red") +
+  ggtitle("Bland-Altman : G1 vs G2")
+print(p_ba)
+cat("\nInterprétation Bland-Altman : biais moyen = ", round(mean(ba$diff),3),
+    " ; limites d'accord ≈ [", round(mean(ba$diff)-1.96*sd(ba$diff),3), ",",
+    round(mean(ba$diff)+1.96*sd(ba$diff),3), "]\n\n")
+
+# ICC (intra-class correlation) — consistency
+icc_res <- ICC(cbind(G1,G2))
+print(icc_res)
+cat("\nInterprétation ICC : >0.75 bon accord, 0.5-0.75 modéré.\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 18) TESTS NON PARAMÉTRIQUES APPARIÉS (Wilcoxon) & Friedman
+# ----------------------------
+# Wilcoxon apparié (ex: score cliniques avant/apres)
+set.seed(42)
+avant <- rpois(40, 12)
+apres <- avant - rpois(40, 3)
+wil_res <- wilcox.test(avant, apres, paired = TRUE)
+print(wil_res)
+cat("\nFriedman test pour données répétées (non paramétrique)\n")
+set.seed(42)
+t1 <- rpois(30,12); t2 <- t1 + rpois(30,1); t3 <- t2 + rpois(30,1)
+fr_res <- friedman.test(cbind(t1,t2,t3))
+print(fr_res)
+cat("\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 19) TEST NORMALITÉ & HOMOGENEITÉ DES VARIANCES (Shapiro, Levene)
+# ----------------------------
+# déjà fait Shapiro plus haut ; ajout Levene sur CD4 M0 par ARM
+lev <- leveneTest(CD4 ~ ARM, data = cd4_m0)
+print(lev)
+cat("\nNote : si non normalité -> tests non-paramétriques ou transformation (log) ou modèles robustes.\n\n")
+```
+
+
+```{r}
+# ----------------------------
+# 20) EXEMPLES D'INTERPRÉTATIONS POUR CHAQUE TEST (PRINT)
+# ----------------------------
+cat("=== Résumé d'interprétations (exemples) ===\n")
+cat("- t-test indépendant (CD4 M12 par ARM) : p=", round(res_t$p.value,4), 
+    " -> ", ifelse(res_t$p.value<0.05,"différence statistiquement significative","\033[1mpas de différence statistiquement significative\033[0m"), "\n")
+cat("- Paired t-test (M0 vs M6) : p=", round(res_paired$p.value,4), "\n")
+cat("- ANOVA (site effect CD4 M0) : p=", signif(summary(anova_res)[[1]]$'Pr(>F)'[1],3), "\n")
+cat("- Mann-Whitney (RNA M6 par ARM) : p=", signif(wilcox_res$p.value,3), "\n")
+cat("- Chi2 (ARM vs success M12) : p=", signif(chi_res$p.value,3), "\n")
+cat("- Cox PH (time to event) : see summary above (HR estimates)\n")
+```
+
+
+```{r}
+# ----------------------------
+# 21) EXPORT / sauvegarde des plots si besoin
+# ----------------------------
+# ggsave("CD4_hist_M0.png", p1, width=7, height=4)
+# ggsave("BlandAltman_G1_G2.png", p_ba, width=7, height=4)
+
+# ----------------------------
+# FIN
+# ----------------------------
+cat("\nScript terminé. Adapte les sections (simulation, seuils, variables) à tes données réelles.\n")
+
+```
+
+
+```{r}
+
+```
+
